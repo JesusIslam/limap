@@ -1,6 +1,7 @@
 package limap
 
 import (
+	"context"
 	"golang.org/x/time/rate"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ type Limap struct {
 	Rate             int
 	Burst            int
 	m                map[uint64]limapEntry
+	StopBGSweeper    context.CancelFunc
 }
 
 type limapEntry struct {
@@ -43,7 +45,9 @@ func New(rate, burst int, expiry time.Duration, initSize int, sweepingInterval t
 	m.SweepingInterval = sweepingInterval
 	m.m = make(map[uint64]limapEntry, initSize)
 
-	go m.RunBGSweeper()
+	ctx, cancel := context.WithCancel(context.Background())
+	m.StopBGSweeper = cancel
+	go m.RunBGSweeper(ctx)
 
 	return
 }
@@ -93,11 +97,16 @@ func (m *Limap) IsAllowed(key []byte) (allowed, ok bool) {
 	return
 }
 
-func (m *Limap) RunBGSweeper() {
+func (m *Limap) RunBGSweeper(ctx context.Context) {
 	t := time.NewTicker(m.SweepingInterval)
 	defer t.Stop()
 
 	for {
+		select {
+		case <-ctx.Done():
+		default:
+		}
+
 		m.lock.Lock()
 
 		for k, v := range m.m {
