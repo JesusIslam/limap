@@ -104,6 +104,7 @@ func (m *Limap) RunBGSweeper(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			return
 		default:
 		}
 
